@@ -1,5 +1,7 @@
 package com.victor.ai_practice_room.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.victor.ai_practice_room.common.Result;
 import com.victor.ai_practice_room.entity.Notice;
 import com.victor.ai_practice_room.service.NoticeService;
@@ -34,7 +36,9 @@ public class NoticeController {
     @GetMapping("/active")  // 处理GET请求
     @Operation(summary = "获取启用的公告", description = "获取状态为启用的公告列表，供前台首页展示使用")  // API描述
     public Result<List<Notice>> getActiveNotices() {
-        return Result.success(null);
+        LambdaQueryWrapper<Notice> noticeLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        noticeLambdaQueryWrapper.eq(Notice::getIsActive,true);
+        return Result.success(noticeService.list(noticeLambdaQueryWrapper),"查询启用的公告成功");
     }
 
     /**
@@ -44,9 +48,11 @@ public class NoticeController {
      */
     @GetMapping("/latest")  // 处理GET请求
     @Operation(summary = "获取最新公告", description = "获取最新发布的公告列表，用于首页推荐展示")  // API描述
-    public Result<List<Notice>> getLatestNotices(
+    public Result<List<Notice>> getLastestNotices(
             @Parameter(description = "限制数量", example = "5") @RequestParam(defaultValue = "5") int limit) {
-        return Result.success(null);
+        LambdaQueryWrapper<Notice> noticeLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        noticeLambdaQueryWrapper.orderByDesc(Notice::getCreateTime).last("LIMIT "+limit);
+        return Result.success(noticeService.list(noticeLambdaQueryWrapper),"获取最新发布的公告列表成功");
     }
 
     /**
@@ -56,7 +62,7 @@ public class NoticeController {
     @GetMapping("/list")  // 处理GET请求
     @Operation(summary = "获取所有公告", description = "获取所有公告列表，包括启用和禁用的，供管理后台使用")  // API描述
     public Result<List<Notice>> getAllNotices() {
-        return Result.success(null);
+        return Result.success(noticeService.list(),"成功获取全部公告列表");
     }
 
     /**
@@ -70,9 +76,9 @@ public class NoticeController {
             @Parameter(description = "公告ID") @PathVariable Long id) {
         Notice notice = noticeService.getById(id);
         if (notice != null) {
-            return Result.success(notice);
+            return Result.success(notice,"获取"+id+"公告成功");
         } else {
-            return Result.error("公告不存在");
+            return Result.error(id+"公告不存在");
         }
     }
 
@@ -84,7 +90,8 @@ public class NoticeController {
     @PostMapping("/add")  // 处理POST请求
     @Operation(summary = "发布新公告", description = "创建并发布新的系统公告")  // API描述
     public Result<String> addNotice(@RequestBody Notice notice) {
-        return Result.success(null);
+        boolean saveResult = noticeService.save(notice);
+        return saveResult?Result.success("发布公告成功"):Result.error("发布公告失败");
     }
 
     /**
@@ -95,7 +102,7 @@ public class NoticeController {
     @PutMapping("/update")  // 处理PUT请求
     @Operation(summary = "更新公告信息", description = "修改公告的内容、标题、类型等信息")  // API描述
     public Result<String> updateNotice(@RequestBody Notice notice) {
-        return Result.success(null);
+        return noticeService.updateById(notice)?Result.success("更新公告"+notice.getId()+"成功"):Result.error("更新公告"+notice.getId()+"失败");
     }
 
     /**
@@ -107,7 +114,7 @@ public class NoticeController {
     @Operation(summary = "删除公告", description = "根据ID删除指定的公告")  // API描述
     public Result<String> deleteNotice(
             @Parameter(description = "公告ID") @PathVariable Long id) {
-        return Result.success(null);
+        return noticeService.removeById(id)?Result.success("删除"+id+"公告成功"):Result.error("删除"+id+"公告失败");
     }
 
     /**
@@ -121,6 +128,8 @@ public class NoticeController {
     public Result<String> toggleNoticeStatus(
             @Parameter(description = "公告ID") @PathVariable Long id,
             @Parameter(description = "是否启用，true为启用，false为禁用") @RequestParam Boolean isActive) {
-        return Result.success(null);
+        LambdaUpdateWrapper<Notice> noticeLambdaUpdateWrapper = new LambdaUpdateWrapper<>();
+        noticeLambdaUpdateWrapper.eq(Notice::getId,id).set(Notice::getIsActive,isActive);
+        return noticeService.update(noticeLambdaUpdateWrapper)?Result.success(isActive?"启用公告成功":"禁用公告成功"):Result.error(isActive?"禁用公告成功":"启用公告成功");
     }
 } 
