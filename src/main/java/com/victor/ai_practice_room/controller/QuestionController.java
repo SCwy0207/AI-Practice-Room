@@ -3,6 +3,7 @@ package com.victor.ai_practice_room.controller;
 import com.victor.ai_practice_room.common.Result;
 import com.victor.ai_practice_room.entity.Question;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.victor.ai_practice_room.service.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,6 +41,8 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "*")  // 允许跨域访问，解决前后端分离开发中的跨域问题
 @Tag(name = "题目管理", description = "题目相关的增删改查操作，包括分页查询、随机获取、热门推荐等功能")  // Swagger标签，用于分组显示API
 public class QuestionController {
+    @Autowired
+    QuestionService questionService;
     
     /**
      * 分页查询题目列表（支持多条件筛选）

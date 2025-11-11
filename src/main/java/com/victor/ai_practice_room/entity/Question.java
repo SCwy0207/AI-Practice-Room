@@ -2,7 +2,10 @@ package com.victor.ai_practice_room.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.math.BigDecimal;
@@ -79,4 +82,4 @@ public class Question extends BaseEntity {
     @Schema(description = "题目所属分类信息")
     @TableField(exist = false)
     private Category category;
-} 
+}
