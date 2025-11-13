@@ -3,4 +3,10 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.victor.ai_practice_room.mapper.QuestionChoiceMapper">
+    <select id="getQuestionAnswerByCondition" resultType="com.victor.ai_practice_room.entity.QuestionChoice">
+        SELECT id, question_id, content, is_correct, sort, create_time, update_time, is_deleted
+        FROM question_choices
+        WHERE is_deleted = 0 AND question_id = #{questionId}
+        ORDER BY sort
+    </select>
 </mapper>

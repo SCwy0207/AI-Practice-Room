@@ -3,9 +3,65 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.victor.ai_practice_room.mapper.QuestionMapper">
+    <insert id="addQuestion">
+        INSERT INTO ques
+    </insert>
     <select id="getCategoriesCount" resultType="map">
         SELECT category_id , count(id) AS count
         FROM questions
         GROUP BY category_id;
     </select>
+    <select id="getPageByCondition" resultMap="questionMap">
+        SELECT q.id as q_id, q.title, q.type, q.multi, q.category_id, q.difficulty, q.score, q.analysis, q.create_time, q.update_time,
+               qa.id as qa_id,qa.question_id as qa_question_id,qa.answer,qa.keywords
+        FROM questions q
+                 LEFT JOIN question_answers qa on q.id = qa.question_id and qa.is_deleted = 0
+        <where>
+            q.is_deleted = 0
+            <if test="questionQueryVo.categoryId!=null">
+                and q.category_id = #{questionQueryVo.categoryId}
+            </if>
+            <if test="questionQueryVo.difficulty!=null and questionQueryVo.difficulty!='' ">
+                and q.difficulty = #{questionQueryVo.difficulty}
+            </if>
+            <if test="questionQueryVo.type!=null and questionQueryVo.type!=''">
+                and q.type = #{questionQueryVo.type}
+            </if>
+            <if test="questionQueryVo.keyword!=null and questionQueryVo.keyword!=''">
+                and UPPER(q.title) LIKE UPPER(CONCAT('%', #{questionQueryVo.keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY q.create_time desc
+    </select>
+    <resultMap id="questionMap" type="com.victor.ai_practice_room.entity.Question" autoMapping="true">
+        <id column="q_id" property="id"/>
+        <association property="answer" javaType="com.victor.ai_practice_room.entity.QuestionAnswer" autoMapping="true">
+            <id column="qa_id" property="id"/>
+        </association>
+        <collection property="choices" select="com.victor.ai_practice_room.mapper.QuestionChoiceMapper.getQuestionAnswerByCondition" column="q_id"/>
+    </resultMap>
+
+    <select id="selectDetailsById" resultMap="questionDetailsMap">
+        SELECT q.id as q_id,q.title,q.type,q.multi,q.category_id,q.difficulty,q.score,q.analysis,
+               qc.id as qc_id,qc.question_id,qc.content,qc.is_correct,qc.sort,
+               qa.id as qa_id,qa.question_id as qc_question_id,qa.answer
+        FROM questions q
+                 LEFT JOIN question_choices qc ON q.id = qc.question_id AND qc.is_deleted=0
+                 LEFT JOIN question_answers qa on q.id = qa.question_id AND qa.is_deleted=0
+        WHERE q.is_deleted=0 AND q.id = #{id}
+        ORDER BY qc.sort
+    </select>
+    <resultMap id="questionDetailsMap" type="com.victor.ai_practice_room.entity.Question" autoMapping="true">
+<!--        映射主键-->
+        <id column="q_id" property="id"/>
+<!--        映射问题的答案-->
+        <association property="answer" javaType="com.victor.ai_practice_room.entity.QuestionAnswer" autoMapping="true">
+            <id column="qa_id" property="id"/>
+        </association>
+<!--        映射问题的选项-->
+        <collection property="choices" ofType="com.victor.ai_practice_room.entity.QuestionChoice" autoMapping="true">
+            <id column="qc_id" property="id"/>
+            <result column="qc_question_id" property="questionId"/>
+        </collection>
+    </resultMap>
 </mapper>

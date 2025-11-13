@@ -1,7 +1,10 @@
 package com.victor.ai_practice_room.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.victor.ai_practice_room.entity.Question;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.victor.ai_practice_room.vo.QuestionQueryVo;
 
 import java.util.List;
 
@@ -29,5 +32,16 @@ import java.util.List;
  * @version 1.0
  */
 public interface QuestionService extends IService<Question> {
-    
-} 
+
+    Question selectDetailsById(Long id);
+
+    IPage<Question> getPageByCondition(Page<Question> questionPage, QuestionQueryVo questionQueryVo);
+
+    boolean addQuestion(Question question);
+
+    boolean updateQuestion(Question question);
+
+    boolean deleteQuestionById(Long id);
+
+    List<Question> getPopularQuestions(Integer size);
+}

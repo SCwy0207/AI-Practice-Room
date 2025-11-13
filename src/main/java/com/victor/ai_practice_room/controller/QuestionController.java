@@ -1,9 +1,11 @@
 package com.victor.ai_practice_room.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.victor.ai_practice_room.common.Result;
 import com.victor.ai_practice_room.entity.Question;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.victor.ai_practice_room.service.QuestionService;
+import com.victor.ai_practice_room.vo.QuestionQueryVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,23 +62,20 @@ public class QuestionController {
      * 
      * @param page 当前页码，从1开始，默认第1页
      * @param size 每页显示数量，默认10条
-     * @param categoryId 分类ID筛选条件，可选
-     * @param difficulty 难度筛选条件（EASY/MEDIUM/HARD），可选
-     * @param type 题型筛选条件（CHOICE/JUDGE/TEXT），可选
-     * @param keyword 关键词搜索，对题目标题进行模糊查询，可选
      * @return 封装的分页查询结果，包含题目列表和分页信息
      */
     @GetMapping("/list")  // 映射GET请求到/api/questions/list
     @Operation(summary = "分页查询题目列表", description = "支持按分类、难度、题型、关键词进行多条件筛选的分页查询")  // Swagger接口描述
-    public Result<Page<Question>> getQuestionList(
+    public Result<IPage<Question>> getQuestionList(
             @Parameter(description = "当前页码，从1开始", example = "1") @RequestParam(defaultValue = "1") Integer page,  // 参数描述
             @Parameter(description = "每页显示数量", example = "10") @RequestParam(defaultValue = "10") Integer size,
-            @Parameter(description = "分类ID筛选条件") @RequestParam(required = false) Long categoryId,
-            @Parameter(description = "难度筛选条件，可选值：EASY/MEDIUM/HARD") @RequestParam(required = false) String difficulty,
-            @Parameter(description = "题型筛选条件，可选值：CHOICE/JUDGE/TEXT") @RequestParam(required = false) String type,
-            @Parameter(description = "关键词搜索，对题目标题进行模糊查询") @RequestParam(required = false) String keyword) {
-        // 返回统一格式的成功响应
-        return Result.success(null);
+            QuestionQueryVo questionQueryVo
+            ) {
+        //封装Page对象
+        Page<Question> questionPage = new Page<>(page,size);
+        //创建分页查询
+        IPage<Question> pageList = questionService.getPageByCondition(questionPage,questionQueryVo);
+        return Result.success(pageList);
     }
     
     /**
@@ -94,8 +93,11 @@ public class QuestionController {
     @Operation(summary = "根据ID查询题目详情", description = "获取指定ID的题目完整信息，包括题目内容、选项、答案等详细数据")  // API描述
     public Result<Question> getQuestionById(
             @Parameter(description = "题目ID", example = "1") @PathVariable Long id) {
-
-        return Result.success(null);
+        Question questions = questionService.selectDetailsById(id);
+        if(questions!=null){
+            return Result.success(questions,"题目"+id+"获取成功");
+        }
+        return Result.error("题目"+id+"获取失败");
     }
     
     /**
@@ -116,8 +118,11 @@ public class QuestionController {
     @PostMapping  // 映射POST请求到/api/questions
     @Operation(summary = "创建新题目", description = "添加新的考试题目，支持选择题、判断题、简答题等多种题型")  // API描述
     public Result<Question> createQuestion(@RequestBody Question question) {
-
-        return Result.success(null);
+        boolean result = questionService.addQuestion(question);
+        if(!result){
+            return Result.error("保存题目"+question.getTitle()+"失败");
+        }
+        return Result.success("保存题目"+question.getTitle()+"失败");
     }
     
     /**
@@ -137,7 +142,11 @@ public class QuestionController {
     public Result<Question> updateQuestion(
             @Parameter(description = "题目ID") @PathVariable Long id, 
             @RequestBody Question question) {
-        return Result.success(null);
+        boolean result = questionService.updateQuestion(question);
+        if(result){
+            return Result.success("更新成功");
+        }
+        return Result.error("更新失败");
     }
     
     /**
@@ -159,7 +168,8 @@ public class QuestionController {
     public Result<String> deleteQuestion(
             @Parameter(description = "题目ID") @PathVariable Long id) {
         // 根据操作结果返回不同的响应
-        if (true) {
+        boolean reuslt = questionService.deleteQuestionById(id);
+        if (reuslt) {
             return Result.success("题目删除成功");
         } else {
             return Result.error("题目删除失败");
@@ -259,10 +269,7 @@ public class QuestionController {
     @Operation(summary = "获取热门题目", description = "获取访问次数最多的热门题目，用于首页推荐展示")  // API描述
     public Result<List<Question>> getPopularQuestions(
             @Parameter(description = "返回题目数量", example = "10") @RequestParam(defaultValue = "10") Integer size) {
-
-        // 异常处理：记录日志并返回友好的错误信息
-        return Result.error("获取热门题目失败");
-
+        return Result.success(questionService.getPopularQuestions(size));
     }
 
     /**
