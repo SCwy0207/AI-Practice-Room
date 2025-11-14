@@ -8,4 +8,5 @@ import java.util.List;
  */
 public interface AIService {
 
+    String callAi(String prompt);
 } 

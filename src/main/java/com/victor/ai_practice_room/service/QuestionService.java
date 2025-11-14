@@ -4,8 +4,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.victor.ai_practice_room.entity.Question;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.victor.ai_practice_room.vo.AiGenerateRequestVo;
+import com.victor.ai_practice_room.vo.QuestionImportVo;
 import com.victor.ai_practice_room.vo.QuestionQueryVo;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -44,4 +48,10 @@ public interface QuestionService extends IService<Question> {
     boolean deleteQuestionById(Long id);
 
     List<Question> getPopularQuestions(Integer size);
+
+    List<QuestionImportVo> previewExcel(MultipartFile file) throws IOException;
+
+    Integer importQuestions(List<QuestionImportVo> questions);
+
+    List<QuestionImportVo> generateQuestionsByAi(AiGenerateRequestVo request);
 }

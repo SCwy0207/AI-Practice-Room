@@ -189,12 +189,19 @@ public class ExcelUtil {
         exampleRow.createCell(9).setCellValue("以上都是");
         exampleRow.createCell(10).setCellValue("D");
         exampleRow.createCell(11).setCellValue("Spring框架的核心特性包括依赖注入、面向切面编程和事务管理等。");
-        
+
         // 自动调整列宽
+        // 增加列宽的最小值
         for (int i = 0; i < headers.length; i++) {
             sheet.autoSizeColumn(i);
+            // 设置最小列宽
+            if (i == 0) { // 题目内容列
+                sheet.setColumnWidth(i, 30 * 256); // 30个字符宽度
+            } else {
+                sheet.setColumnWidth(i, 15 * 256); // 其他列
+            }
         }
-        
+
         try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
             workbook.write(out);
             workbook.close();

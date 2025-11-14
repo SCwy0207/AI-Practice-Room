@@ -1,7 +1,9 @@
 package com.victor.ai_practice_room.controller;
 
 
+import com.google.common.net.HttpHeaders;
 import com.victor.ai_practice_room.common.Result;
+import com.victor.ai_practice_room.service.QuestionService;
 import com.victor.ai_practice_room.utils.ExcelUtil;
 import com.victor.ai_practice_room.vo.AiGenerateRequestVo;
 import com.victor.ai_practice_room.vo.QuestionImportVo;
@@ -9,11 +11,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -26,6 +30,8 @@ import java.util.List;
 @CrossOrigin(origins = "*")  // 允许跨域访问
 @Tag(name = "题目批量操作", description = "题目批量管理相关操作，包括Excel导入、AI生成题目、批量验证等功能")  // Swagger API分组
 public class QuestionBatchController {
+    @Autowired
+    private QuestionService questionService;
     
 
     /**
@@ -34,8 +40,13 @@ public class QuestionBatchController {
      */
     @GetMapping("/template")  // 处理GET请求
     @Operation(summary = "下载Excel导入模板", description = "下载题目批量导入的Excel模板文件")  // API描述
-    public ResponseEntity<byte[]> downloadTemplate() {
-      return null;
+    public ResponseEntity<byte[]> downloadTemplate() throws IOException {
+        byte[] bytes = ExcelUtil.generateTemplate();
+        //创建ResponseEntity对象，设置状态码、响应头、字节数组
+        ResponseEntity<byte[]> responseEntity = ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=temmplate.xlsx")
+                .body(bytes);
+        return responseEntity;
     }
     
     /**
@@ -46,8 +57,10 @@ public class QuestionBatchController {
     @PostMapping("/preview-excel")  // 处理POST请求
     @Operation(summary = "预览Excel文件内容", description = "解析并预览Excel文件中的题目内容，不会导入到数据库")  // API描述
     public Result<List<QuestionImportVo>> previewExcel(
-            @Parameter(description = "Excel文件，支持.xls和.xlsx格式") @RequestParam("file") MultipartFile file) {
-       return null;
+            @Parameter(description = "Excel文件，支持.xls和.xlsx格式") @RequestParam("file") MultipartFile file) throws IOException {
+        //调用QuestionService的previewExcel方法预览题目内容
+        List<QuestionImportVo> questionImportVos = questionService.previewExcel(file);
+        return Result.success(questionImportVos);
     }
     
     /**
@@ -59,7 +72,7 @@ public class QuestionBatchController {
     @Operation(summary = "从Excel文件批量导入题目", description = "解析Excel文件并将题目批量导入到数据库")  // API描述
     public Result<String> importFromExcel(
             @Parameter(description = "Excel文件，包含题目数据") @RequestParam("file") MultipartFile file) {
-      return null;
+        return null;
     }
     
     /**
@@ -71,8 +84,8 @@ public class QuestionBatchController {
     @Operation(summary = "AI智能生成题目", description = "使用AI技术根据指定主题和要求智能生成题目，支持预览后再决定是否导入")  // API描述
     public Result<List<QuestionImportVo>> generateQuestionsByAi(
             @RequestBody @Validated AiGenerateRequestVo request) {
-
-       return Result.error("AI生成题目失败");
+        List<QuestionImportVo> questionImportVoList = questionService.generateQuestionsByAi(request);
+        return Result.success(questionImportVoList);
     }
     
     /**
@@ -83,9 +96,8 @@ public class QuestionBatchController {
     @PostMapping("/import-questions")  // 处理POST请求
     @Operation(summary = "批量导入题目", description = "将题目列表批量导入到数据库，支持Excel解析后的导入或AI生成后的确认导入")  // API描述
     public Result<String> importQuestions(@RequestBody List<QuestionImportVo> questions) {
-
-       return Result.error("批量导入题目失败!" );
-
+        Integer successCount = questionService.importQuestions(questions);
+        return Result.success("一共导入" + questions.size() + "道题，成功导入" + successCount + "道题" );
     }
     
     /**

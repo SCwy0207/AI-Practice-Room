@@ -1,21 +1,30 @@
 package com.victor.ai_practice_room.service.impl;
 
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.victor.ai_practice_room.entity.*;
 import com.victor.ai_practice_room.exception.ExamException;
 import com.victor.ai_practice_room.mapper.*;
+import com.victor.ai_practice_room.service.AIService;
 import com.victor.ai_practice_room.service.QuestionService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.victor.ai_practice_room.utils.ExcelUtil;
+import com.victor.ai_practice_room.vo.AiGenerateRequestVo;
+import com.victor.ai_practice_room.vo.QuestionImportVo;
 import com.victor.ai_practice_room.vo.QuestionQueryVo;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -37,6 +46,8 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
     private QuestionAnswerMapper questionAnswerMapper;
     @Autowired
     private PaperQuestionMapper paperQuestionMapper;
+    @Autowired
+    private AIService aiService;
 
     //获取指定ID的题目完整信息，包括题目内容、选项、答案等详细数据
     @Override
@@ -127,6 +138,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
                 choices.forEach(choice ->{
                     int index = atomicInteger.getAndIncrement();
                     choice.setId(null);
+                    choice.setQuestionId(question.getId());
                     choice.setCreateTime(null);
                     choice.setUpdateTime(null);
                     //判断当前选项是否是正确答案
@@ -212,6 +224,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         fillQuestionAnswerAndChoice(popularQuestions);
         return popularQuestions;
     }
+
     //给题目设置题目答案和题目选项的方法
     private void fillQuestionAnswerAndChoice(List<Question> records) {
         if (!CollectionUtils.isEmpty(records)) {
@@ -251,4 +264,230 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
             });
         }
     }
+    //Excel预览功能
+    @Override
+    public List<QuestionImportVo> previewExcel(MultipartFile file) throws IOException {
+        //判断文件是否为空
+        if(file.isEmpty()||file.getSize()==0){
+            throw new ExamException(454,"上传模板文件为空,请检查后重新上传文件");
+        }
+        //判断是否为Excel文件
+        if(!file.getOriginalFilename().endsWith(".xls")&& !file.getOriginalFilename().endsWith(".xlsx")){
+            throw new ExamException(455,"文件格式不正确，请重新上传excel文件");
+        }
+        //调用ExcelUtil工具类中的方法解析Excel文件
+        List<QuestionImportVo> questionImportVos = ExcelUtil.parseExcel(file);
+        return questionImportVos;
+    }
+    //导入题目数据
+    @Override
+    public Integer importQuestions(List<QuestionImportVo> questionImportVos) {
+        //判断是否有数据
+        if(CollectionUtils.isEmpty(questionImportVos)){
+            //没有数据，抛出异常
+            throw new ExamException(456,"没有导入任何题目,请检查数据");
+        }
+        //遍历所有的题目
+        AtomicInteger successCount = new AtomicInteger();
+        questionImportVos.forEach(questionImportVo ->{
+            //将questionImportVo转换为Question类型
+            Question question =convertQuestionImportVoToQuestion(questionImportVo);
+            //调用自定义的方法向数据库中插入题目、题目答案、题目选项
+            addQuestion(question);
+            successCount.getAndIncrement();
+        });
+        return successCount.get();
+    }
+
+    @Override
+    public List<QuestionImportVo> generateQuestionsByAi(AiGenerateRequestVo request) {
+        //1.生成提示词
+        String prompt = buildPrompt(request);
+        //2.调用AI大模型
+        String content = aiService.callAi(prompt);
+        //3.解析结果
+        int startIndex = content.indexOf("```json");
+        int endIndex = content.lastIndexOf("```");
+        //保证有数据，且下标正确！
+        if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
+            //获取真正结果
+            String realResult = content.substring(startIndex+7,endIndex);
+            System.out.println("realResult = " + realResult);
+            JSONObject jsonObject = JSONObject.parseObject(realResult);
+            JSONArray questions = jsonObject.getJSONArray("questions");
+            List<QuestionImportVo> questionImportVoList = new ArrayList<>();
+            for (int i = 0; i < questions.size(); i++) {
+                //获取对象
+                JSONObject questionJson = questions.getJSONObject(i);
+                QuestionImportVo questionImportVo = new QuestionImportVo();
+                questionImportVo.setTitle(questionJson.getString("title"));
+                questionImportVo.setType(questionJson.getString("type"));
+                questionImportVo.setMulti(questionJson.getBoolean("multi"));
+                questionImportVo.setDifficulty(questionJson.getString("difficulty"));
+                questionImportVo.setScore(questionJson.getInteger("score"));
+                questionImportVo.setAnalysis(questionJson.getString("analysis"));
+                questionImportVo.setCategoryId(request.getCategoryId());
+
+                //选择题处理选项
+                if ("CHOICE".equals(questionImportVo.getType())) {
+                    JSONArray choices = questionJson.getJSONArray("choices");
+                    List<QuestionImportVo.ChoiceImportDto> choiceImportDtoList = new ArrayList<>(choices.size());
+                    for (int i1 = 0; i1 < choices.size(); i1++) {
+                        JSONObject choicesJSONObject = choices.getJSONObject(i1);
+                        QuestionImportVo.ChoiceImportDto choiceImportDto = new QuestionImportVo.ChoiceImportDto();
+                        choiceImportDto.setContent(choicesJSONObject.getString("content"));
+                        choiceImportDto.setIsCorrect(choicesJSONObject.getBoolean("isCorrect"));
+                        choiceImportDto.setSort(choicesJSONObject.getInteger("sort"));
+                        choiceImportDtoList.add(choiceImportDto);
+                    }
+                    questionImportVo.setChoices(choiceImportDtoList);
+                }
+                //答案 [判断题！ TRUE |FALSE  false true  f  t 是 否]
+                questionImportVo.setAnswer(questionJson.getString("answer"));
+                questionImportVoList.add(questionImportVo);
+            }
+            return questionImportVoList;
+        }
+        throw new RuntimeException("ai生成题目json数据结构错误，无法正常解析！数据为：%s".formatted(content));
+    }
+
+
+    //将questionImportVo转换为Question类型
+    private Question convertQuestionImportVoToQuestion(QuestionImportVo questionImportVo) {
+        //创建一个Question对象
+        Question question = new Question();
+        //调用BeanUtils工具类中的方法复制相同属性的属性值
+        BeanUtils.copyProperties(questionImportVo,question);
+        //创建QuestionAnswer对象
+        QuestionAnswer questionAnswer = new QuestionAnswer();
+        //对于判断题和简答题设置答案
+        if("JUDGE".equalsIgnoreCase(questionImportVo.getType())){
+            //如果是判断题，将问题的答案转为大写
+            questionAnswer.setAnswer(questionImportVo.getAnswer().toUpperCase());
+        }else{
+            questionAnswer.setAnswer(questionImportVo.getAnswer());
+        }
+        //设置keywords
+        questionAnswer.setKeywords(questionImportVo.getKeywords());
+        //给题目设置答案
+        question.setAnswer(questionAnswer);
+        //判断是否是选择题
+        if("CHOICE".equalsIgnoreCase(questionImportVo.getType())){
+            //获取所有的选项
+            List<QuestionImportVo.ChoiceImportDto> choices = questionImportVo.getChoices();
+            //创建一个List<QuestionChoice>集合
+            List<QuestionChoice> questionChoices = new ArrayList<>();
+            if(!CollectionUtils.isEmpty(choices)){
+                choices.forEach(choice->{
+                    QuestionChoice questionChoice = new QuestionChoice();
+                    BeanUtils.copyProperties(choice,questionChoice);
+                    questionChoices.add(questionChoice);
+                });
+            }else{
+                throw new ExamException(456,"选项为空，");
+            }
+            question.setChoices(questionChoices);
+        }
+        return question;
+    }
+    public String buildPrompt(AiGenerateRequestVo request) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("请为我生成").append(request.getCount()).append("道关于【")
+                .append(request.getTopic()).append("】的题目。\n\n");
+
+        prompt.append("要求：\n");
+
+        // 题目类型要求
+        if (request.getTypes() != null && !request.getTypes().isEmpty()) {
+            List<String> typeList = Arrays.asList(request.getTypes().split(","));
+            prompt.append("- 题目类型：");
+            for (String type : typeList) {
+                switch (type.trim()) {
+                    case "CHOICE":
+                        prompt.append("选择题");
+                        if (request.getIncludeMultiple() != null && request.getIncludeMultiple()) {
+                            prompt.append("(包含单选和多选)");
+                        }
+                        prompt.append(" ");
+                        break;
+                    case "JUDGE":
+                        prompt.append("判断题（**重要：确保正确答案和错误答案的数量大致平衡，不要全部都是正确或错误**） ");
+                        break;
+                    case "TEXT":
+                        prompt.append("简答题 ");
+                        break;
+                }
+            }
+            prompt.append("\n");
+        }
+
+        // 难度要求
+        if (request.getDifficulty() != null) {
+            String difficultyText = switch (request.getDifficulty()) {
+                case "EASY" -> "简单";
+                case "MEDIUM" -> "中等";
+                case "HARD" -> "困难";
+                default -> "中等";
+            };
+            prompt.append("- 难度等级：").append(difficultyText).append("\n");
+        }
+
+        // 额外要求
+        if (request.getRequirements() != null && !request.getRequirements().isEmpty()) {
+            prompt.append("- 特殊要求：").append(request.getRequirements()).append("\n");
+        }
+
+        // 判断题特别要求
+        if (request.getTypes() != null && request.getTypes().contains("JUDGE")) {
+            prompt.append("- **判断题特别要求**：\n");
+            prompt.append("  * 确保生成的判断题中，正确答案(TRUE)和错误答案(FALSE)的数量尽量平衡\n");
+            prompt.append("  * 不要所有判断题都是正确的或都是错误的\n");
+            prompt.append("  * 错误的陈述应该是常见的误解或容易混淆的概念\n");
+            prompt.append("  * 正确的陈述应该是重要的基础知识点\n");
+        }
+
+        prompt.append("\n请严格按照以下JSON格式返回，不要包含任何其他文字：\n");
+        prompt.append("```json\n");
+        prompt.append("{\n");
+        prompt.append("  \"questions\": [\n");
+        prompt.append("    {\n");
+        prompt.append("      \"title\": \"题目内容\",\n");
+        prompt.append("      \"type\": \"CHOICE|JUDGE|TEXT\",\n");
+        prompt.append("      \"multi\": true/false,\n");
+        prompt.append("      \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
+        prompt.append("      \"score\": 5,\n");
+        prompt.append("      \"choices\": [\n");
+        prompt.append("        {\"content\": \"选项内容\", \"isCorrect\": true/false, \"sort\": 1}\n");
+        prompt.append("      ],\n");
+        prompt.append("      \"answer\": \"TRUE或FALSE(判断题专用)|文本答案(简答题专用)\",\n");
+        prompt.append("      \"analysis\": \"题目解析\"\n");
+        prompt.append("    }\n");
+        prompt.append("  ]\n");
+        prompt.append("}\n");
+        prompt.append("```\n\n");
+
+        prompt.append("注意：\n");
+        prompt.append("1. 选择题必须有choices数组，判断题和简答题设置answer字段\n");
+        prompt.append("2. 多选题的multi字段设为true，单选题设为false\n");
+        prompt.append("3. **判断题的answer字段只能是\"TRUE\"或\"FALSE\"，请确保答案分布合理**\n");
+        prompt.append("4. 每道题都要有详细的解析\n");
+        prompt.append("5. 题目要有实际价值，贴近实际应用场景\n");
+        prompt.append("6. 严格按照JSON格式返回，确保可以正确解析\n");
+
+        // 如果只生成判断题，额外强调答案平衡
+        if (request.getTypes() != null && request.getTypes().equals("JUDGE") && request.getCount() > 1) {
+            prompt.append("7. **判断题答案分布要求**：在").append(request.getCount()).append("道判断题中，");
+            int halfCount = request.getCount() / 2;
+            if (request.getCount() % 2 == 0) {
+                prompt.append("请生成").append(halfCount).append("道正确(TRUE)和").append(halfCount).append("道错误(FALSE)的题目");
+            } else {
+                prompt.append("请生成约").append(halfCount).append("-").append(halfCount + 1).append("道正确(TRUE)和约").append(halfCount).append("-").append(halfCount + 1).append("道错误(FALSE)的题目");
+            }
+        }
+
+        return prompt.toString();
+    }
+
+
 }
