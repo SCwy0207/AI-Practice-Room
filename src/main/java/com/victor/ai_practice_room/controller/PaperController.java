@@ -1,16 +1,22 @@
 package com.victor.ai_practice_room.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.victor.ai_practice_room.common.Result;
 import com.victor.ai_practice_room.entity.Paper;
+import com.victor.ai_practice_room.entity.PaperQuestion;
+import com.victor.ai_practice_room.service.PaperService;
 import com.victor.ai_practice_room.vo.AiPaperVo;
 import com.victor.ai_practice_room.vo.PaperVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 试卷控制器 - 处理试卷管理相关的HTTP请求
@@ -20,6 +26,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/papers")  // 试卷API路径前缀
 @Tag(name = "试卷管理", description = "试卷相关操作，包括创建、查询、更新、删除，以及AI智能组卷功能")  // Swagger API分组
 public class PaperController {
+    @Autowired
+    private PaperService paperService;
 
 
 
@@ -28,11 +36,25 @@ public class PaperController {
      */
     @GetMapping("/list")  // 处理GET请求
     @Operation(summary = "获取试卷列表", description = "支持按名称模糊搜索和状态筛选的试卷列表查询")  // API描述
-    public Result<java.util.List<Paper>> listPapers(
+    public Result<List<Paper>> listPapers(
             @Parameter(description = "试卷名称，支持模糊查询") @RequestParam(required = false) String name,
             @Parameter(description = "试卷状态，可选值：DRAFT/PUBLISHED/STOPPED") @RequestParam(required = false) String status) {
-
-        return Result.success(null);
+        List<Paper> papers;
+        if(StringUtils.hasLength(name)){
+            papers= paperService.selectPaperByName(name);
+            if(papers!=null){
+                return Result.success(papers,"试卷列表查询成功");
+            }
+            return Result.error("试卷列表查询失败,请先添加试卷");
+        }else{
+            if(StringUtils.hasLength(status)){
+                papers = paperService.list(new LambdaQueryWrapper<Paper>().eq(Paper::getStatus,status).eq(Paper::getIsDeleted,0));
+                return Result.success(papers);
+            }else{
+                papers = paperService.list(new LambdaQueryWrapper<Paper>().eq(Paper::getIsDeleted,0));
+                return Result.success(papers);
+            }
+        }
     }
 
     /**
@@ -41,8 +63,12 @@ public class PaperController {
     @PostMapping  // 处理POST请求
     @Operation(summary = "手动创建试卷", description = "通过手动选择题目的方式创建试卷")  // API描述
     public Result<Paper> createPaper(@RequestBody PaperVo paperVo) {
-
-        return Result.success(null, "试卷创建成功");
+        boolean result = paperService.savePaperVo(paperVo);
+        if(result){
+            return Result.success("试卷\""+paperVo.getName()+"\"创建成功");
+        }else{
+            return Result.error("试卷\""+paperVo.getName()+"\"创建失败,请联系开发");
+        }
     }
 
     /**
@@ -56,7 +82,12 @@ public class PaperController {
     public Result<Paper> updatePaper(
             @Parameter(description = "试卷ID") @PathVariable Integer id, 
             @RequestBody PaperVo paperVo) {
-        return Result.success(null, "试卷更新成功");
+        boolean result = paperService.updatePaperById(paperVo,id);
+        if(result){
+            return Result.success("试卷\""+paperVo.getName()+"\"更新成功");
+        }else{
+            return Result.error("试卷\""+paperVo.getName()+"\"更新失败,请联系开发");
+        }
     }
 
     /**
@@ -76,7 +107,12 @@ public class PaperController {
     @GetMapping("/{id}")  // 处理GET请求
     @Operation(summary = "获取试卷详情", description = "获取试卷的详细信息，包括试卷基本信息和包含的所有题目")  // API描述
     public Result<Paper> getPaperById(@Parameter(description = "试卷ID") @PathVariable Integer id) {
-        return Result.success(null);
+        Paper result = paperService.getPaperDetailsById(id);
+        if(result!=null){
+            return Result.success(result,"试卷查询成功");
+        }else{
+            return Result.error("试卷查询失败");
+        }
     }
 
     /**
@@ -90,7 +126,12 @@ public class PaperController {
     public Result<Void> updatePaperStatus(
             @Parameter(description = "试卷ID") @PathVariable Integer id, 
             @Parameter(description = "新的状态，可选值：PUBLISHED/STOPPED") @RequestParam String status) {
-        return Result.success(null, "状态更新成功");
+        boolean result = paperService.updatePaperStatus(id, status);
+        if(result){
+            return Result.success("试卷更新成功");
+        }else{
+            return Result.error("试卷更新失败");
+        }
     }
 
     /**
@@ -102,7 +143,11 @@ public class PaperController {
     @Operation(summary = "删除试卷", description = "删除指定的试卷，注意：已发布的试卷不能删除")  // API描述
     public Result<Void> deletePaper(@Parameter(description = "试卷ID") @PathVariable Integer id) {
         // 检查试卷是否存在  // 验证试卷存在性
-
-        return Result.error("试卷删除失败");
+        boolean result = paperService.deletePaperById(id);
+        if(result){
+            return Result.success("试卷删除成功");
+        }else{
+            return Result.error("试卷删除失败");
+        }
     }
 } 

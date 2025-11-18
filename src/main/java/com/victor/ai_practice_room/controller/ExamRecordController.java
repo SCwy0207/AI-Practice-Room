@@ -1,14 +1,20 @@
 package com.victor.ai_practice_room.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.victor.ai_practice_room.common.Result;
 import com.victor.ai_practice_room.entity.ExamRecord;
+import com.victor.ai_practice_room.entity.Paper;
+import com.victor.ai_practice_room.service.ExamRecordService;
+import com.victor.ai_practice_room.service.PaperService;
 import com.victor.ai_practice_room.vo.ExamRankingVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -23,25 +29,53 @@ import java.util.List;
 @RequestMapping("/api/exam-records")  // 考试记录API路径前缀
 @Tag(name = "考试记录管理", description = "考试记录相关操作，包括记录查询、成绩管理、排行榜展示等功能")  // Swagger API分组
 public class ExamRecordController {
-
-
-
+    @Autowired
+    private ExamRecordService examRecordService;
+    @Autowired
+    private  PaperService paperService;
     /**
      * 分页查询考试记录
      */
     @GetMapping("/list")  // 处理GET请求
     @Operation(summary = "分页查询考试记录", description = "支持多条件筛选的考试记录分页查询，包括按姓名、状态、时间范围等筛选")  // API描述
     public Result<Page<ExamRecord>> getExamRecords(
-            @Parameter(description = "当前页码，从1开始", example = "1") @RequestParam(defaultValue = "1") Integer page,
-            @Parameter(description = "每页显示数量", example = "20") @RequestParam(defaultValue = "20") Integer size,
+            @Parameter(description = "当前页码，从1开始", example = "1") @RequestParam(defaultValue = "1") Long page,
+            @Parameter(description = "每页显示数量", example = "20") @RequestParam(defaultValue = "20") Long size,
             @Parameter(description = "学生姓名筛选条件") @RequestParam(required = false) String studentName,
             @Parameter(description = "学号筛选条件") @RequestParam(required = false) String studentNumber,
             @Parameter(description = "考试状态，0-进行中，1-已完成，2-已批阅") @RequestParam(required = false) Integer status,
             @Parameter(description = "开始日期，格式：yyyy-MM-dd") @RequestParam(required = false) String startDate,
             @Parameter(description = "结束日期，格式：yyyy-MM-dd") @RequestParam(required = false) String endDate
     ) {
-
-        return Result.success(null);
+        //创建分页对象
+        Page<ExamRecord> examRecordPage = new Page<>();
+        //创建LambdaQueryWrapper封装查询条件
+        LambdaQueryWrapper<ExamRecord> examRecordLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        //如果前端传递了studentName，则根据条件模糊查询学生姓名
+        examRecordLambdaQueryWrapper.like(StringUtils.hasLength(studentName),ExamRecord::getStudentName,studentName);
+        if(status!=null){
+            String statusStr = switch(status){
+                case 0 ->"进行中";
+                case 1 ->"已完成";
+                case 2 ->"已批阅";
+                default ->null;
+            };
+            //根据考试记录状态查询
+            examRecordLambdaQueryWrapper.eq(StringUtils.hasLength(statusStr),ExamRecord::getStatus,statusStr);
+        }
+        //根据考试时间查询记录
+        examRecordLambdaQueryWrapper.between(StringUtils.hasLength(startDate)&&StringUtils.hasLength(endDate),ExamRecord::getStartTime,startDate,endDate);
+        //调用分页查询方法
+        examRecordService.page(examRecordPage,examRecordLambdaQueryWrapper);
+        //获取当前页中的数据
+        List<ExamRecord> records = examRecordPage.getRecords();
+        //遍历当前页中的记录并设置试卷
+        records.forEach(record->{
+            Paper paperDetailsById = paperService.getPaperDetailsById(record.getExamId());
+            //设置试卷信息
+            record.setPaper(paperDetailsById);
+        });
+        return Result.success(examRecordPage);
     }
 
     /**
@@ -62,8 +96,11 @@ public class ExamRecordController {
     @Operation(summary = "删除考试记录", description = "根据ID删除指定的考试记录")  // API描述
     public Result<Void> deleteExamRecord(
             @Parameter(description = "考试记录ID") @PathVariable Integer id) {
-
-         return Result.error("删除失败");
+        boolean result = examRecordService.deleteExamRecordById(id);
+        if(result){
+            return Result.success("删除成功");
+        }
+        return Result.error("删除失败");
     }
 
     /**
@@ -81,7 +118,7 @@ public class ExamRecordController {
             @Parameter(description = "显示数量限制，可选，不传则返回所有记录") @RequestParam(required = false) Integer limit
     ) {
         // 使用优化的查询方法，避免N+1查询问题
-
-        return Result.success(null);
+        List<ExamRankingVO> examRankingVOList = examRecordService.getExamRanking(paperId, limit);
+        return Result.success(examRankingVOList);
     }
 } 

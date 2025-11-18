@@ -51,6 +51,17 @@
         WHERE q.is_deleted=0 AND q.id = #{id}
         ORDER BY qc.sort
     </select>
+    <select id="getQuestionListByPaperId" resultMap="questionDetailsMap">
+        SELECT q.id as q_id,q.title,q.type,q.multi,q.category_id,q.difficulty,q.score,q.analysis,q.create_time,q.update_time,
+               pq.score as paperScore,
+               qa.id as qa_id,qa.question_id,qa.answer,qa.keywords,
+               qc.id as qc_id,qc.question_id,qc.content,qc.is_correct,qc.sort
+        FROM questions q
+                 LEFT JOIN paper_question pq on pq.question_id = q.id and pq.is_deleted=0
+                 LEFT JOIN question_answers qa on q.id = qa.question_id and qa.is_deleted=0
+                 LEFT JOIN question_choices qc on q.id = qc.question_id and qc.is_deleted=0
+        WHERE q.is_deleted =0 and pq.paper_id = #{paperId}
+    </select>
     <resultMap id="questionDetailsMap" type="com.victor.ai_practice_room.entity.Question" autoMapping="true">
 <!--        映射主键-->
         <id column="q_id" property="id"/>
@@ -62,6 +73,6 @@
         <collection property="choices" ofType="com.victor.ai_practice_room.entity.QuestionChoice" autoMapping="true">
             <id column="qc_id" property="id"/>
             <result column="qc_question_id" property="questionId"/>
-        </collection>
+    </collection>
     </resultMap>
 </mapper>

@@ -27,4 +27,6 @@ public interface QuestionMapper extends BaseMapper<Question> {
     IPage<Question> getPageByCondition(Page<Question> questionPage, QuestionQueryVo questionQueryVo);
 
     boolean addQuestion(Question question);
+
+    List<Question> getQuestionListByPaperId(Integer id);
 } 

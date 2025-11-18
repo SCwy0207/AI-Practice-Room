@@ -134,11 +134,6 @@
             <artifactId>redisson</artifactId>
             <version>3.24.3</version>
         </dependency>
-<!--        ai模型依赖-->
-        <dependency>
-            <groupId></groupId>
-            <artifactId></artifactId>
-        </dependency>
     </dependencies>
 
     <!-- Spring Boot Maven插件，用于打包可执行的JAR文件 -->

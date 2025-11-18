@@ -3,4 +3,20 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.victor.ai_practice_room.mapper.ExamRecordMapper">
+    <select id="getExamRanking" resultType="com.victor.ai_practice_room.vo.ExamRankingVO">
+        select
+        er.id, er.exam_id, er.student_name, er.score, er.start_time, er.end_time,
+        p.name paperName,p.total_score paperTotalScore,p.duration
+        from exam_records er
+        left join paper p
+        on er.exam_id = p.id and p.is_deleted = 0
+        <where>
+            er.is_deleted = 0
+            <if test="paperId != null">
+                and er.exam_id = #{paperId}
+            </if>
+        </where>
+        order by er.score desc
+        limit #{limit}
+    </select>
 </mapper>
